@@ -1,0 +1,205 @@
+{
+  "subjects": {
+    "History": {
+      "books": [
+        {"name": "History Sutra", "status": "in_progress", "pct": 40, "target_month": "November"},
+        {"name": "Modern History - Spectrum", "status": "not_started", "pct": 0, "target_month": "November"},
+        {"name": "Ancient & Medieval - NCERT + notes", "status": "not_started", "pct": 0, "target_month": "November"},
+        {"name": "Intro to Indian Art (Cl. 11)", "status": "not_started", "pct": 0, "target_month": "December"},
+        {"name": "Themes in Indian History I & II", "status": "not_started", "pct": 0, "target_month": "December"},
+        {"name": "Indian Culture - Nitin Singhania", "status": "not_started", "pct": 0, "target_month": "December"}
+      ]
+    },
+    "Geography": {
+      "books": [
+        {"name": "Geography Sutra", "status": "not_started", "pct": 0, "target_month": "August"},
+        {"name": "NCERT Geography 11/12", "status": "not_started", "pct": 0, "target_month": "August"},
+        {"name": "Raj Tanil Maam (video series)", "status": "not_started", "pct": 0, "target_month": "August"},
+        {"name": "GC Leong (selective)", "status": "not_started", "pct": 0, "target_month": "August"},
+        {"name": "Atlas practice", "status": "not_started", "pct": 0, "target_month": "August"}
+      ]
+    },
+    "Polity": {
+      "books": [
+        {"name": "Polity Sutra", "status": "not_started", "pct": 0, "target_month": "October"},
+        {"name": "Indian Constitution at Work - NCERT", "status": "not_started", "pct": 0, "target_month": "October"},
+        {"name": "Laxmikanth", "status": "not_started", "pct": 0, "target_month": "October"},
+        {"name": "Political Theory - NCERT", "status": "not_started", "pct": 0, "target_month": "October"},
+        {"name": "PIB / PRS", "status": "ongoing", "pct": null, "target_month": null}
+      ]
+    },
+    "Economy": {
+      "books": [
+        {"name": "NCERT Economy", "status": "not_started", "pct": 0, "target_month": "September"},
+        {"name": "Mrunal videos", "status": "not_started", "pct": 0, "target_month": "September"},
+        {"name": "Ramesh Singh / Sanjeev Verma", "status": "not_started", "pct": 0, "target_month": "September"},
+        {"name": "Current Affairs (Economy)", "status": "ongoing", "pct": null, "target_month": null}
+      ]
+    },
+    "IR_Governance_Ethics": {
+      "books": [
+        {"name": "Shyam Saran - IR", "status": "not_started", "pct": 0, "target_month": "January"},
+        {"name": "2nd ARC 4th Report (Ethics)", "status": "not_started", "pct": 0, "target_month": "January"},
+        {"name": "2nd ARC 12th Report (Ethics)", "status": "not_started", "pct": 0, "target_month": "January"}
+      ]
+    },
+    "CurrentAffairs": {
+      "books": [
+        {"name": "Vision IAS Monthly Magazine", "status": "ongoing", "pct": null, "target_month": null}
+      ]
+    },
+    "AnswerWriting": {
+      "books": [
+        {"name": "Toppers' Copies practice", "status": "ongoing", "pct": null, "target_month": null}
+      ]
+    },
+    "Environment": {
+      "books": [
+        {"name": "Environment - placeholder (fill in via /setup)", "status": "not_started", "pct": 0, "target_month": "August"}
+      ]
+    },
+    "Optional": {
+      "books": [
+        {"name": "Optional subject - placeholder (fill in via /setup)", "status": "not_started", "pct": 0, "target_month": "January"}
+      ]
+    }
+  },
+
+  "monthly_plan": {
+    "August": ["Geography", "Environment"],
+    "September": ["Economy", "Polity"],
+    "October": ["Polity"],
+    "November": ["History"],
+    "December": ["History", "Optional"],
+    "January": ["IR_Governance_Ethics", "Optional"],
+    "February": ["Prelims Revision + Tests"],
+    "March": ["Prelims Revision + Tests"],
+    "April": ["Prelims Revision + Tests"],
+    "May": ["Prelims Revision + Tests"]
+  },
+
+  "timetable": {
+    "Monday": [
+      {"start": "06:00", "end": "08:00", "activity": "Path + Breakfast"},
+      {"start": "08:00", "end": "09:00", "activity": "UPSC Prep"},
+      {"start": "09:00", "end": "11:00", "activity": "UPSC Prep"},
+      {"start": "11:00", "end": "12:00", "activity": "Lec-EE370"},
+      {"start": "12:00", "end": "13:00", "activity": "Lec-EE200"},
+      {"start": "13:00", "end": "14:00", "activity": "Lunch"},
+      {"start": "14:00", "end": "15:15", "activity": "Lec-CS350"},
+      {"start": "15:15", "end": "15:30", "activity": "Transition"},
+      {"start": "15:30", "end": "17:00", "activity": "Lec-CS778"},
+      {"start": "17:00", "end": "18:00", "activity": "Lec-PHI441"},
+      {"start": "18:00", "end": "19:00", "activity": "Relax + Exercise"},
+      {"start": "19:00", "end": "20:00", "activity": "Path + G.S."},
+      {"start": "20:00", "end": "22:00", "activity": "Current Affairs"},
+      {"start": "22:00", "end": "23:00", "activity": "UPSC Prep"},
+      {"start": "23:00", "end": "23:59", "activity": "Next Day Tasks"}
+    ],
+    "Tuesday": [
+      {"start": "06:00", "end": "08:00", "activity": "Path + Breakfast"},
+      {"start": "08:00", "end": "09:00", "activity": "Lec-EE320"},
+      {"start": "09:00", "end": "11:00", "activity": "UPSC Prep"},
+      {"start": "11:00", "end": "12:00", "activity": "UPSC Prep"},
+      {"start": "12:00", "end": "13:00", "activity": "Lunch"},
+      {"start": "13:00", "end": "14:00", "activity": "Course Rev"},
+      {"start": "14:00", "end": "15:15", "activity": "Lec-CS778"},
+      {"start": "15:15", "end": "17:00", "activity": "Course Rev"},
+      {"start": "17:00", "end": "18:00", "activity": "Tut-EE370"},
+      {"start": "18:00", "end": "19:00", "activity": "Relax + Exercise"},
+      {"start": "19:00", "end": "20:00", "activity": "Path + G.S."},
+      {"start": "20:00", "end": "22:00", "activity": "Current Affairs"},
+      {"start": "22:00", "end": "23:00", "activity": "UPSC Prep"},
+      {"start": "23:00", "end": "23:59", "activity": "Next Day Tasks"}
+    ],
+    "Wednesday": [
+      {"start": "06:00", "end": "08:00", "activity": "Path + Breakfast"},
+      {"start": "08:00", "end": "09:00", "activity": "Lec-EE320"},
+      {"start": "09:00", "end": "11:00", "activity": "Course Rev + Assign"},
+      {"start": "11:00", "end": "12:00", "activity": "Lec-EE370"},
+      {"start": "12:00", "end": "13:00", "activity": "Lec-EE200"},
+      {"start": "13:00", "end": "14:00", "activity": "UPSC Prep"},
+      {"start": "14:00", "end": "15:15", "activity": "UPSC Prep"},
+      {"start": "15:15", "end": "17:00", "activity": "UPSC Prep"},
+      {"start": "17:00", "end": "18:00", "activity": "Lec-PHI441"},
+      {"start": "18:00", "end": "19:00", "activity": "Relax + Exercise"},
+      {"start": "19:00", "end": "20:00", "activity": "Path + G.S."},
+      {"start": "20:00", "end": "22:00", "activity": "Current Affairs"},
+      {"start": "22:00", "end": "23:00", "activity": "UPSC Prep"},
+      {"start": "23:00", "end": "23:59", "activity": "Next Day Tasks"}
+    ],
+    "Thursday": [
+      {"start": "06:00", "end": "08:00", "activity": "Path + Breakfast"},
+      {"start": "08:00", "end": "09:00", "activity": "Lec-EE320"},
+      {"start": "09:00", "end": "11:00", "activity": "Course Rev"},
+      {"start": "11:00", "end": "12:00", "activity": "Course Rev"},
+      {"start": "12:00", "end": "13:00", "activity": "Tut-EE200"},
+      {"start": "13:00", "end": "14:00", "activity": "Lunch"},
+      {"start": "14:00", "end": "15:15", "activity": "Lec-CS350"},
+      {"start": "15:15", "end": "17:00", "activity": "UPSC Prep"},
+      {"start": "17:00", "end": "18:00", "activity": "UPSC Prep"},
+      {"start": "18:00", "end": "19:00", "activity": "Relax + Exercise"},
+      {"start": "19:00", "end": "20:00", "activity": "Path + G.S."},
+      {"start": "20:00", "end": "22:00", "activity": "Current Affairs"},
+      {"start": "22:00", "end": "23:00", "activity": "UPSC Prep"},
+      {"start": "23:00", "end": "23:59", "activity": "Next Day Tasks"}
+    ],
+    "Friday": [
+      {"start": "06:00", "end": "08:00", "activity": "Path + Breakfast"},
+      {"start": "08:00", "end": "09:00", "activity": "UPSC Prep"},
+      {"start": "09:00", "end": "11:00", "activity": "UPSC Prep"},
+      {"start": "11:00", "end": "12:00", "activity": "Lec-EE370"},
+      {"start": "12:00", "end": "13:00", "activity": "Lec-EE200"},
+      {"start": "13:00", "end": "14:00", "activity": "Course Rev"},
+      {"start": "14:00", "end": "15:00", "activity": "Course Rev"},
+      {"start": "15:00", "end": "16:00", "activity": "Tut-EE320"},
+      {"start": "16:00", "end": "17:00", "activity": "Course Rev"},
+      {"start": "17:00", "end": "18:00", "activity": "Lec-PHI441"},
+      {"start": "18:00", "end": "19:00", "activity": "Relax + Exercise"},
+      {"start": "19:00", "end": "20:00", "activity": "Path + G.S."},
+      {"start": "20:00", "end": "22:00", "activity": "Current Affairs"},
+      {"start": "22:00", "end": "23:00", "activity": "UPSC Prep"},
+      {"start": "23:00", "end": "23:59", "activity": "Next Day Tasks"}
+    ],
+    "Saturday": [
+      {"start": "06:00", "end": "08:00", "activity": "Path + Breakfast"},
+      {"start": "08:00", "end": "09:00", "activity": "UPSC Prep"},
+      {"start": "09:00", "end": "11:00", "activity": "UPSC Prep"},
+      {"start": "11:00", "end": "12:00", "activity": "Courses"},
+      {"start": "12:00", "end": "13:00", "activity": "Courses"},
+      {"start": "13:00", "end": "14:00", "activity": "1hr sleep + UPSC Prep"},
+      {"start": "14:00", "end": "15:15", "activity": "UPSC Prep"},
+      {"start": "15:15", "end": "17:00", "activity": "UPSC Prep"},
+      {"start": "17:00", "end": "18:00", "activity": "UPSC Prep"},
+      {"start": "18:00", "end": "19:00", "activity": "Relax + Exercise"},
+      {"start": "19:00", "end": "20:00", "activity": "Path + G.S."},
+      {"start": "20:00", "end": "22:00", "activity": "Current Affairs"},
+      {"start": "22:00", "end": "23:00", "activity": "Courses"},
+      {"start": "23:00", "end": "23:59", "activity": "Next Day Tasks"}
+    ],
+    "Sunday": [
+      {"start": "06:00", "end": "08:00", "activity": "Path + Breakfast"},
+      {"start": "08:00", "end": "09:00", "activity": "UPSC Prep"},
+      {"start": "09:00", "end": "11:00", "activity": "UPSC Prep"},
+      {"start": "11:00", "end": "12:00", "activity": "Courses"},
+      {"start": "12:00", "end": "13:00", "activity": "Courses"},
+      {"start": "13:00", "end": "14:00", "activity": "1hr sleep + UPSC Prep"},
+      {"start": "14:00", "end": "15:15", "activity": "UPSC Prep"},
+      {"start": "15:15", "end": "17:00", "activity": "UPSC Prep"},
+      {"start": "17:00", "end": "18:00", "activity": "UPSC Prep"},
+      {"start": "18:00", "end": "19:00", "activity": "Relax + Exercise"},
+      {"start": "19:00", "end": "20:00", "activity": "Path + G.S."},
+      {"start": "20:00", "end": "22:00", "activity": "Current Affairs"},
+      {"start": "22:00", "end": "23:00", "activity": "Courses"},
+      {"start": "23:00", "end": "23:59", "activity": "Next Day Tasks"}
+    ]
+  },
+
+  "exam_dates": [
+    {"label": "Mid Semester Exam Starts", "date": "2026-09-13"},
+    {"label": "End Semester Exam Starts", "date": "2026-11-16"}
+  ],
+
+  "daily_logs": {},
+  "review_history": []
+}

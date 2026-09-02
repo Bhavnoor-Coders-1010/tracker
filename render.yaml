@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: tracker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_DATA_REPO
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
