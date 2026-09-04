@@ -73,6 +73,27 @@ class TrackerDataTests(unittest.TestCase):
         finally:
             app.GITHUB_TOKEN = old
 
+    def test_send_email_uses_resend_api(self):
+        old = app.RESEND_API_KEY, app.EMAIL_FROM, app.NOTIFY_TO
+        try:
+            app.RESEND_API_KEY = "test-key"
+            app.EMAIL_FROM = "onboarding@resend.dev"
+            app.NOTIFY_TO = "me@example.com"
+            response = Mock(status_code=200)
+            with patch.object(app.requests, "post", return_value=response) as post:
+                app.send_email("Subject", "Body")
+            self.assertEqual(post.call_args.kwargs["json"], {
+                "from": "onboarding@resend.dev",
+                "to": ["me@example.com"],
+                "subject": "Subject",
+                "text": "Body",
+            })
+            self.assertEqual(
+                post.call_args.kwargs["headers"]["Authorization"], "Bearer test-key"
+            )
+        finally:
+            app.RESEND_API_KEY, app.EMAIL_FROM, app.NOTIFY_TO = old
+
     def test_github_conflict_refreshes_sha_once(self):
         old_token, old_repo, old_sha = (
             app.GITHUB_TOKEN, app.GITHUB_DATA_REPO, app._sha_cache

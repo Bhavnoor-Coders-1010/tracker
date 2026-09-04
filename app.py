@@ -13,9 +13,7 @@ import calendar
 import hashlib
 import html as html_module
 import re
-import smtplib
 import threading
-from email.mime.text import MIMEText
 from datetime import datetime, date, timedelta
 from typing import Optional, List
 from zoneinfo import ZoneInfo
@@ -32,9 +30,10 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_DATA_REPO = os.environ.get("GITHUB_DATA_REPO", "")  # "username/tracker-data"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_DATA_REPO}/contents/data.json"
 
-GMAIL_USER = os.environ.get("GMAIL_USER", "")
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
-NOTIFY_TO = os.environ.get("NOTIFY_TO", GMAIL_USER)
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
+NOTIFY_TO = os.environ.get("NOTIFY_TO", "")
+RESEND_API_URL = "https://api.resend.com/emails"
 
 # Used to build the link in the daily-review email. Set this to your
 # https://<service>.onrender.com URL once you know it (Render env var).
@@ -514,16 +513,19 @@ def remaining_blocks_today(data: dict) -> List[dict]:
 # ---------------------------------------------------------------------------
 def send_email(subject: str, body: str, to: Optional[str] = None) -> None:
     to = to or NOTIFY_TO
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD or not to:
-        print(f"[email skipped - missing GMAIL_USER/GMAIL_APP_PASSWORD/recipient] {subject}")
+    if not RESEND_API_KEY or not EMAIL_FROM or not to:
+        print(f"[email skipped - missing RESEND_API_KEY/EMAIL_FROM/recipient] {subject}")
         return
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = GMAIL_USER
-    msg["To"] = to
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        server.send_message(msg)
+    response = requests.post(
+        RESEND_API_URL,
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={"from": EMAIL_FROM, "to": [to], "subject": subject, "text": body},
+        timeout=15,
+    )
+    response.raise_for_status()
 
 
 # ---------------------------------------------------------------------------
@@ -1042,24 +1044,23 @@ async def review_submit(request: Request):
 
 @app.get("/test-email")
 def test_email():
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD or not NOTIFY_TO:
+    if not RESEND_API_KEY or not EMAIL_FROM or not NOTIFY_TO:
         return {
             "status": "skipped",
-            "message": "Set GMAIL_USER, GMAIL_APP_PASSWORD, and NOTIFY_TO (or use GMAIL_USER as the recipient).",
+            "message": "Set RESEND_API_KEY, EMAIL_FROM, and NOTIFY_TO.",
         }
     try:
         send_email("Anushasan test email", "If you're reading this, email sending works.")
-    except (smtplib.SMTPException, OSError) as exc:
+    except (requests.RequestException, OSError) as exc:
         print(f"[email test failed] {type(exc).__name__}: {exc}")
         return {
             "status": "failed",
             "message": (
-                "SMTP delivery failed. Check the hosting logs for the error type "
-                "and verify the Gmail App Password and recipient settings."
+                "Resend delivery failed. Check the hosting logs for the error type "
+                "and verify the Resend API key, sender, and recipient settings."
             ),
         }
-    ok = bool(GMAIL_USER and GMAIL_APP_PASSWORD)
-    return {"status": "sent" if ok else "skipped - missing GMAIL_USER/GMAIL_APP_PASSWORD"}
+    return {"status": "sent"}
 
 
 # ---------------------------------------------------------------------------

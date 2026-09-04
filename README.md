@@ -12,8 +12,9 @@ uvicorn app:app --reload
 
 Without GitHub credentials the app uses `seed_data.json` in memory, which is
 useful for local UI checks. For persistence set `GITHUB_TOKEN` (a token with
-Contents read/write access) and `GITHUB_DATA_REPO` (`owner/repo`). Optional
-Gmail variables are `GMAIL_USER`, `GMAIL_APP_PASSWORD`, and `NOTIFY_TO`.
+Contents read/write access) and `GITHUB_DATA_REPO` (`owner/repo`). Email
+delivery uses Resend over HTTPS: set `RESEND_API_KEY`, `EMAIL_FROM`
+(`onboarding@resend.dev` for testing), and `NOTIFY_TO`.
 
 The `/setup` page accepts validated JSON for the timetable, exam dates, and
 monthly plan. Timetable blocks use stable `id` values; omitted IDs are

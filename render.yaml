@@ -7,9 +7,11 @@ services:
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
-      - key: GMAIL_USER
+      - key: RESEND_API_KEY
         sync: false
-      - key: GMAIL_APP_PASSWORD
+      - key: EMAIL_FROM
+        sync: false
+      - key: NOTIFY_TO
         sync: false
       - key: GITHUB_TOKEN
         sync: false
