@@ -23,6 +23,20 @@ class TrackerDataTests(unittest.TestCase):
                          second["timetable"]["Monday"][0]["id"])
         self.assertEqual(first["timetable"]["Monday"][0]["id"][0], "b")
 
+    def test_chapter_book_progress_is_derived_from_chapters(self):
+        data = app.normalize_data({
+            "subjects": {"History": {"books": [{
+                "name": "Modern History - Spectrum",
+                "status": "not_started",
+                "pct": 0,
+                "chapters_completed": 3,
+            }]}},
+        })
+        book = data["subjects"]["History"]["books"][0]
+        self.assertEqual(book["chapter_total"], 39)
+        self.assertEqual(book["chapters_completed"], 3)
+        self.assertEqual(book["pct"], 8)
+
     def test_weekly_counts_ignore_duplicate_and_stray_completions(self):
         data = {"daily_logs": {
             "2026-09-03": {

@@ -3,17 +3,17 @@
     "History": {
       "books": [
         {"name": "History Sutra", "status": "in_progress", "pct": 40, "target_month": "November"},
-        {"name": "Modern History - Spectrum", "status": "not_started", "pct": 0, "target_month": "November"},
-        {"name": "Ancient & Medieval - NCERT + notes", "status": "not_started", "pct": 0, "target_month": "November"},
-        {"name": "Intro to Indian Art (Cl. 11)", "status": "not_started", "pct": 0, "target_month": "December"},
-        {"name": "Themes in Indian History I & II", "status": "not_started", "pct": 0, "target_month": "December"},
-        {"name": "Indian Culture - Nitin Singhania", "status": "not_started", "pct": 0, "target_month": "December"}
+        {"name": "Modern History - Spectrum", "status": "not_started", "pct": 0, "target_month": "November", "chapter_total": 39, "chapters_completed": 0},
+        {"name": "Ancient & Medieval - Class 11 tamil nadu ncert", "status": "not_started", "pct": 0, "target_month": "November", "chapter_total": 23, "chapters_completed": 0},
+        {"name": "Intro to Indian Art (Class 11 NCERT)", "status": "not_started", "pct": 0, "target_month": "December", "chapter_total": 7, "chapters_completed": 0},
+        {"name": "Themes in Indian History I & II - NCERT", "status": "not_started", "pct": 0, "target_month": "December", "chapter_total": 8, "chapters_completed": 0},
+        {"name": "Indian Culture - Nitin Singhania", "status": "not_started", "pct": 0, "target_month": "December", "chapter_total": 31, "chapters_completed": 0}
       ]
     },
     "Geography": {
       "books": [
         {"name": "Geography Sutra", "status": "not_started", "pct": 0, "target_month": "August"},
-        {"name": "NCERT Geography 11/12", "status": "not_started", "pct": 0, "target_month": "August"},
+        {"name": "NCERT Geography Class 11/12", "status": "not_started", "pct": 0, "target_month": "August", "chapter_total": 37, "chapters_completed": 0},
         {"name": "Raj Tanil Maam (video series)", "status": "not_started", "pct": 0, "target_month": "August"},
         {"name": "GC Leong (selective)", "status": "not_started", "pct": 0, "target_month": "August"},
         {"name": "Atlas practice", "status": "not_started", "pct": 0, "target_month": "August"}
@@ -22,17 +22,17 @@
     "Polity": {
       "books": [
         {"name": "Polity Sutra", "status": "not_started", "pct": 0, "target_month": "October"},
-        {"name": "Indian Constitution at Work - NCERT", "status": "not_started", "pct": 0, "target_month": "October"},
-        {"name": "Laxmikanth", "status": "not_started", "pct": 0, "target_month": "October"},
-        {"name": "Political Theory - NCERT", "status": "not_started", "pct": 0, "target_month": "October"},
+        {"name": "Indian Constitution at Work - NCERT", "status": "not_started", "pct": 0, "target_month": "October", "chapter_total": 10, "chapters_completed": 0},
+        {"name": "Indian Polity - Laxmikanth", "status": "not_started", "pct": 0, "target_month": "October", "chapter_total": 92, "chapters_completed": 0},
+        {"name": "Political Theory - NCERT - class 11", "status": "not_started", "pct": 0, "target_month": "October", "chapter_total": 8, "chapters_completed": 0},
         {"name": "PIB / PRS", "status": "ongoing", "pct": null, "target_month": null}
       ]
     },
     "Economy": {
       "books": [
-        {"name": "NCERT Economy", "status": "not_started", "pct": 0, "target_month": "September"},
+        {"name": "NCERT Economy - class 11", "status": "not_started", "pct": 0, "target_month": "September", "chapter_total": 8, "chapters_completed": 0},
         {"name": "Mrunal videos", "status": "not_started", "pct": 0, "target_month": "September"},
-        {"name": "Ramesh Singh / Sanjeev Verma", "status": "not_started", "pct": 0, "target_month": "September"},
+        {"name": "Indian Economy - Sanjeev Verma", "status": "not_started", "pct": 0, "target_month": "September", "chapter_total": 30, "chapters_completed": 0},
         {"name": "Current Affairs (Economy)", "status": "ongoing", "pct": null, "target_month": null}
       ]
     },

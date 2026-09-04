@@ -53,6 +53,27 @@ DAILY_REVIEW_TIME = "23:45"  # Asia/Kolkata; the review closes the current day.
 DAILY_REVIEW_HOUR, DAILY_REVIEW_MINUTE = (int(v) for v in DAILY_REVIEW_TIME.split(":"))
 VALID_STATUSES = {"not_started", "in_progress", "done", "ongoing"}
 _BLOCK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+CHAPTER_TOTALS = {
+    "Modern History - Spectrum": 39,
+    "Ancient & Medieval - Class 11 tamil nadu ncert": 23,
+    "Ancient & Medieval - NCERT + notes": 23,
+    "Intro to Indian Art (Class 11 NCERT)": 7,
+    "Intro to Indian Art (Cl. 11)": 7,
+    "Themes in Indian History I & II - NCERT": 8,
+    "Themes in Indian History I & II": 8,
+    "Indian Culture - Nitin Singhania": 31,
+    "NCERT Geography Class 11/12": 37,
+    "NCERT Geography 11/12": 37,
+    "Indian Constitution at Work - NCERT": 10,
+    "Indian Polity - Laxmikanth": 92,
+    "Laxmikanth": 92,
+    "Political Theory - NCERT - class 11": 8,
+    "Political Theory - NCERT": 8,
+    "NCERT Economy - class 11": 8,
+    "NCERT Economy": 8,
+    "Indian Economy - Sanjeev Verma": 30,
+    "Ramesh Singh / Sanjeev Verma": 30,
+}
 
 app = FastAPI(title="Anushasan - UPSC + Academics Tracker")
 
@@ -65,6 +86,8 @@ class Book(BaseModel):
     status: str = "not_started"          # not_started | in_progress | done | ongoing
     pct: Optional[int] = 0
     target_month: Optional[str] = None
+    chapter_total: Optional[int] = None
+    chapters_completed: int = 0
 
 
 class Subject(BaseModel):
@@ -280,19 +303,35 @@ def normalize_data(raw: object) -> dict:
                 try:
                     raw_pct = raw_book.get("pct", 0)
                     pct = None if raw_pct is None else max(0, min(100, int(raw_pct)))
+                    book_name = _text(raw_book.get("name"), "Untitled book", 200)
+                    chapter_total = raw_book.get("chapter_total")
+                    if chapter_total is None:
+                        chapter_total = CHAPTER_TOTALS.get(book_name)
+                    chapter_total = (
+                        max(1, int(chapter_total)) if chapter_total is not None else None
+                    )
+                    chapters_completed = max(
+                        0, min(chapter_total or 0, int(raw_book.get("chapters_completed", 0)))
+                    )
                     status = _text(raw_book.get("status"), "not_started")
                     if status not in VALID_STATUSES:
                         status = "not_started"
                     if status == "ongoing":
                         pct = None
+                    elif chapter_total:
+                        pct = round(100 * chapters_completed / chapter_total)
+                        if pct >= 100:
+                            status = "done"
                     book = Book(
-                        name=_text(raw_book.get("name"), "Untitled book", 200),
+                        name=book_name,
                         status=status,
                         pct=pct,
                         target_month=(
                             _text(raw_book.get("target_month"))
                             if raw_book.get("target_month") in MONTH_CYCLE else None
                         ),
+                        chapter_total=chapter_total,
+                        chapters_completed=chapters_completed,
                     )
                 except (TypeError, ValueError, ValidationError):
                     continue
@@ -890,6 +929,37 @@ def review_form():
             <label for="{safe_block_id}" style="margin:0;">{html_module.escape(b["start"])}-{html_module.escape(b["end"])} - {html_module.escape(b["activity"])}</label>
         </div>"""
 
+    study_rows = ""
+    for subject_name, subject in data.get("subjects", {}).items():
+        book_rows = ""
+        for index, book in enumerate(subject.get("books", [])):
+            safe_subject = html_module.escape(subject_name, quote=True)
+            safe_name = html_module.escape(str(book["name"]))
+            if book.get("chapter_total"):
+                control = (
+                    f'<input type="number" name="chapters__{safe_subject}__{index}" '
+                    f'min="0" max="{book["chapter_total"]}" value="0" style="width:5rem;"> '
+                    f'<span class="muted">chapters today '
+                    f'(total {book["chapter_total"]}, done {book.get("chapters_completed", 0)})</span>'
+                )
+            elif book.get("status") != "ongoing":
+                control = (
+                    f'<input type="number" name="progress__{safe_subject}__{index}" '
+                    f'min="0" max="100" placeholder="{book.get("pct", 0)}" style="width:5rem;"> '
+                    '<span class="muted">% complete</span>'
+                )
+            else:
+                control = '<span class="muted">ongoing - no percentage</span>'
+            book_rows += (
+                f'<div class="book-row"><span>{safe_name}</span>'
+                f'<span style="display:flex;gap:0.4rem;align-items:center;">{control}</span></div>'
+            )
+        if book_rows:
+            study_rows += (
+                f'<div class="card"><h3>{html_module.escape(subject_name.replace("_", " "))}</h3>'
+                f'{book_rows}</div>'
+            )
+
     body = f"""
     <form method="post" action="/review">
       <div class="card">
@@ -898,8 +968,13 @@ def review_form():
         {rows}
         <label>Notes</label>
         <textarea name="notes" style="min-height:80px;font-family:inherit;">{html_module.escape(str(existing.get("notes", "")))}</textarea>
-        <button type="submit">Save review</button>
       </div>
+      <div class="card">
+        <h2>Study progress</h2>
+        <p class="muted">For chapter books, enter chapters completed today. Other books use current percentage.</p>
+        {study_rows}
+      </div>
+      <button type="submit">Save review</button>
     </form>
     """
     return page("Review", body)
@@ -915,10 +990,48 @@ async def review_submit(request: Request):
     completed_ids = list(dict.fromkeys(
         value for value in form.getlist("completed") if value in planned_ids
     ))
+    study_entries = []
+    for key, raw_value in form.items():
+        prefix, separator, remainder = key.partition("__")
+        subject_name, separator, index_text = remainder.rpartition("__")
+        if not separator or prefix not in {"chapters", "progress"}:
+            continue
+        try:
+            index = int(index_text)
+            book = data["subjects"][subject_name]["books"][index]
+            amount = int(str(raw_value))
+        except (ValueError, TypeError, KeyError, IndexError):
+            continue
+        if amount < 0:
+            continue
+        if prefix == "chapters" and book.get("chapter_total"):
+            remaining = book["chapter_total"] - book.get("chapters_completed", 0)
+            added = min(amount, max(remaining, 0))
+            book["chapters_completed"] = book.get("chapters_completed", 0) + added
+            book["pct"] = round(100 * book["chapters_completed"] / book["chapter_total"])
+            if book["pct"] >= 100:
+                book["status"] = "done"
+            elif added and book["status"] == "not_started":
+                book["status"] = "in_progress"
+            study_entries.append({
+                "subject": subject_name, "book": book["name"],
+                "chapters": added, "type": "chapters",
+            })
+        elif prefix == "progress" and not book.get("chapter_total"):
+            book["pct"] = max(0, min(100, amount))
+            if book["pct"] >= 100:
+                book["status"] = "done"
+            elif book["pct"] and book["status"] == "not_started":
+                book["status"] = "in_progress"
+            study_entries.append({
+                "subject": subject_name, "book": book["name"],
+                "pct": book["pct"], "type": "percentage",
+            })
     data.setdefault("daily_logs", {})[today_str] = {
         "planned_blocks": planned_ids,
         "completed_blocks": completed_ids,
         "notes": str(form.get("notes", ""))[:5000],
+        "study_entries": study_entries,
     }
     try:
         save_data(data, f"Daily review for {today_str}")

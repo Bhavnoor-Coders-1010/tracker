@@ -20,6 +20,10 @@ monthly plan. Timetable blocks use stable `id` values; omitted IDs are
 generated automatically. Times are interpreted in `Asia/Kolkata`. The daily
 review reminder runs at **23:45 IST**, weekly digest at Sunday 21:00 IST.
 
+On `/review`, chapter-tracked books ask for chapters completed that day; the
+app accumulates those chapters and derives the book percentage from the stored
+total. Other non-ongoing books accept their current percentage directly.
+
 Run the focused checks with:
 
 ```bash
