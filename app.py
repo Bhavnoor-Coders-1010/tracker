@@ -1042,7 +1042,22 @@ async def review_submit(request: Request):
 
 @app.get("/test-email")
 def test_email():
-    send_email("Anushasan test email", "If you're reading this, email sending works.")
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD or not NOTIFY_TO:
+        return {
+            "status": "skipped",
+            "message": "Set GMAIL_USER, GMAIL_APP_PASSWORD, and NOTIFY_TO (or use GMAIL_USER as the recipient).",
+        }
+    try:
+        send_email("Anushasan test email", "If you're reading this, email sending works.")
+    except (smtplib.SMTPException, OSError) as exc:
+        print(f"[email test failed] {type(exc).__name__}: {exc}")
+        return {
+            "status": "failed",
+            "message": (
+                "SMTP delivery failed. Check the hosting logs for the error type "
+                "and verify the Gmail App Password and recipient settings."
+            ),
+        }
     ok = bool(GMAIL_USER and GMAIL_APP_PASSWORD)
     return {"status": "sent" if ok else "skipped - missing GMAIL_USER/GMAIL_APP_PASSWORD"}
 
