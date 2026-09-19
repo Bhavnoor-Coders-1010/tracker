@@ -94,6 +94,30 @@ class TrackerDataTests(unittest.TestCase):
         finally:
             app.RESEND_API_KEY, app.EMAIL_FROM, app.NOTIFY_TO = old
 
+    def test_block_reminder_email_uses_general_motivation(self):
+        with patch.object(app.random, "choice", return_value="Done is better than perfect."):
+            subject, body = app._block_reminder_email("Courses", "10:00", "11:00")
+        self.assertEqual(subject, "Next: Courses")
+        self.assertEqual(
+            body,
+            'Your next block: 10:00-11:00\n\n'
+            '"Done is better than perfect."\n\n'
+            "Start now: Courses.",
+        )
+
+    def test_block_reminder_email_uses_upsc_motivation(self):
+        with patch.object(
+            app.random,
+            "choice",
+            return_value="LBSNAA is waiting. Put in the work.",
+        ) as choice:
+            subject, body = app._block_reminder_email(
+                "Current Affairs", "08:00", "09:00"
+            )
+        choice.assert_called_once_with(app.UPSC_MOTIVATION_LINES)
+        self.assertEqual(subject, "Next: Current Affairs")
+        self.assertIn("LBSNAA is waiting. Put in the work.", body)
+
     def test_github_conflict_refreshes_sha_once(self):
         old_token, old_repo, old_sha = (
             app.GITHUB_TOKEN, app.GITHUB_DATA_REPO, app._sha_cache

@@ -15,6 +15,7 @@ import hashlib
 import html as html_module
 import io
 import re
+import random
 import smtplib
 import threading
 import wave
@@ -774,6 +775,48 @@ async def send_current_affairs_reminder_email() -> None:
 # ---------------------------------------------------------------------------
 scheduler = BackgroundScheduler(timezone=TZ)
 
+GENERAL_MOTIVATION_LINES = (
+    "You don't have to be great to start, but you have to start to be great.",
+    "The secret of getting ahead is getting started.",
+    "Done is better than perfect.",
+    "Be stronger than your excuses.",
+    "Small progress is still progress.",
+    "Don't stop until you're proud.",
+    "Control the controllable: your effort, your focus, your hours.",
+    "Work hard in silence. Let success make the noise.",
+    "Discipline is choosing between what you want now and what you want most.",
+    "Don’t watch the clock; do what it does. Keep going.",
+    
+)
+
+UPSC_MOTIVATION_LINES = (
+    "Great administrators are built on routine. Let your discipline outlast your motivation.",
+    "UPSC is an elimination game. Do not eliminate yourself today by letting distraction win.",
+    "You are preparing to shoulder the responsibility of a nation.",
+    "LBSNAA is waiting. Put in the work.",
+    "An officer does not make excuses; an officer finds solutions.",
+    "Never forget your WHY. You're not doing this for yourself, you're doing this for everybody, for a bigger reason!"
+)
+
+
+def _reminder_motivation_line(activity: str) -> str:
+    lines = (
+        UPSC_MOTIVATION_LINES
+        if any(term in activity.lower() for term in ("upsc", "current affairs"))
+        else GENERAL_MOTIVATION_LINES
+    )
+    return random.choice(lines)
+
+
+def _block_reminder_email(activity: str, start: str, end: str) -> tuple[str, str]:
+    subject = f"Next: {activity}"
+    body = (
+        f"Your next block: {start}-{end}\n\n"
+        f'"{_reminder_motivation_line(activity)}"\n\n'
+        f"Start now: {activity}."
+    )
+    return subject, body
+
 
 def job_block_reminder(activity: str, start: str, end: str) -> None:
     if activity.lower().startswith("current affairs"):
@@ -781,7 +824,10 @@ def job_block_reminder(activity: str, start: str, end: str) -> None:
             asyncio.run(send_current_affairs_reminder_email())
         except Exception:
             pass
-    send_email(f"Next: {activity}", f"Next: {activity} - {start}-{end}")
+    subject, body = _block_reminder_email(activity, start, end)
+    send_email(subject, body)
+
+
 def job_daily_review_prompt() -> None:
     link = f"{APP_BASE_URL}/review" if APP_BASE_URL else "/review"
     send_email(
