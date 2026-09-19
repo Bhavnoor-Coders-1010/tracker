@@ -3,3 +3,6 @@ uvicorn[standard]
 apscheduler
 requests
 python-multipart
+python-dotenv
+google-genai
+telethon

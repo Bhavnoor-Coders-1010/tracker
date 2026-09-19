@@ -6,23 +6,45 @@ Single-file FastAPI app. Configuration and run instructions are in README.md.
 # ---------------------------------------------------------------------------
 # ---- SECTION: Imports & Config ----
 # ---------------------------------------------------------------------------
+import asyncio
 import os
 import json
 import base64
 import calendar
 import hashlib
 import html as html_module
+import io
 import re
+import smtplib
 import threading
+import wave
 from datetime import datetime, date, timedelta
+from email.message import EmailMessage
 from typing import Optional, List
 from zoneinfo import ZoneInfo
 
 import requests
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field, ValidationError
+
+load_dotenv()
+
+try:
+    from telethon import TelegramClient
+    from telethon.tl.types import InputMessagesFilterDocument
+except ImportError:  # pragma: no cover - optional runtime dependency
+    TelegramClient = None
+    InputMessagesFilterDocument = None
+
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:  # pragma: no cover - optional runtime dependency
+    genai = None
+    types = None
 
 TZ = ZoneInfo("Asia/Kolkata")
 
@@ -38,6 +60,19 @@ RESEND_API_URL = "https://api.resend.com/emails"
 # Used to build the link in the daily-review email. Set this to your
 # https://<service>.onrender.com URL once you know it (Render env var).
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
+
+# Current-affairs audio reminder pipeline configuration
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_TEXT_MODEL = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+GEMINI_TTS_MODEL = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+GEMINI_TTS_VOICE = os.environ.get("GEMINI_TTS_VOICE", "Kore")
+TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID", "")
+TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
+TELEGRAM_SESSION_NAME = os.environ.get("TELEGRAM_SESSION_NAME", "current_affairs_session")
+TELEGRAM_CHAT = os.environ.get("TELEGRAM_CHAT", "")
+TELEGRAM_FILE_REGEX = os.environ.get("TELEGRAM_FILE_REGEX", r"^CURRENT AFFAIRS.*\.pdf$")
+TELEGRAM_DELIVERY_CHAT = os.environ.get("TELEGRAM_DELIVERY_CHAT", "")
+CAF_AUDIO_ATTACHED = os.environ.get("CAF_AUDIO_ATTACHED", "true").lower() in {"1", "true", "yes"}
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAY_CODE = {"Monday": "mon", "Tuesday": "tue", "Wednesday": "wed", "Thursday": "thu",
@@ -511,21 +546,206 @@ def remaining_blocks_today(data: dict) -> List[dict]:
 # ---------------------------------------------------------------------------
 # ---- SECTION: Email ----
 # ---------------------------------------------------------------------------
-def send_email(subject: str, body: str, to: Optional[str] = None) -> None:
+def send_email(subject: str, body: str, to: Optional[str] = None,
+               attachment_path: Optional[str] = None,
+               attachment_name: Optional[str] = None,
+               attachment_bytes: Optional[bytes] = None,
+               attachment_mime: str = "application/octet-stream") -> None:
     to = to or NOTIFY_TO
-    if not RESEND_API_KEY or not EMAIL_FROM or not to:
-        print(f"[email skipped - missing RESEND_API_KEY/EMAIL_FROM/recipient] {subject}")
+    if not EMAIL_FROM or not to:
+        print(f"[email skipped - missing EMAIL_FROM/recipient] {subject}")
         return
-    response = requests.post(
-        RESEND_API_URL,
-        headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={"from": EMAIL_FROM, "to": [to], "subject": subject, "text": body},
-        timeout=15,
+
+    if attachment_path is None and attachment_bytes is None:
+        if not RESEND_API_KEY:
+            print(f"[email skipped - missing RESEND_API_KEY] {subject}")
+            return
+        response = requests.post(
+            RESEND_API_URL,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Authorization": "Bearer " + RESEND_API_KEY,
+                "Content-Type": "application/json",
+            },
+            json={"from": EMAIL_FROM, "to": [to], "subject": subject, "text": body},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return
+
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    if not all([smtp_host, smtp_user, smtp_password]):
+        raise RuntimeError("SMTP_HOST/SMTP_USER/SMTP_PASSWORD must be set for attachment emails")
+
+    msg = EmailMessage()
+    msg["From"] = EMAIL_FROM
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    if attachment_bytes is not None:
+        msg.add_attachment(
+            attachment_bytes,
+            maintype="audio" if "audio" in attachment_mime else "application",
+            subtype=attachment_mime.split("/")[-1] if "/" in attachment_mime else "octet-stream",
+            filename=attachment_name or "attachment",
+        )
+    elif attachment_path:
+        with open(attachment_path, "rb") as fh:
+            payload = fh.read()
+        msg.add_attachment(
+            payload,
+            maintype="audio" if "audio" in attachment_mime else "application",
+            subtype=attachment_mime.split("/")[-1] if "/" in attachment_mime else "octet-stream",
+            filename=attachment_name or os.path.basename(attachment_path),
+        )
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+
+
+# ---------------------------------------------------------------------------
+# ---- SECTION: Current Affairs Audio Summaries ----
+# ---------------------------------------------------------------------------
+
+
+def _current_affairs_pipeline_enabled() -> bool:
+    return bool(GEMINI_API_KEY and TELEGRAM_API_ID and TELEGRAM_API_HASH and TELEGRAM_CHAT)
+
+
+def _current_affairs_summary_prompt() -> str:
+    return (
+        "You are preparing the script for a daily audio news briefing. "
+        "Read the attached current-affairs document and write a spoken-style "
+        "narration script that covers ALL the news items in it, in a natural, "
+        "conversational tone suitable for text-to-speech narration. Do not use "
+        "bullet points, markdown, or headers; write it as continuous prose meant "
+        "to be read aloud, organized topic by topic with brief spoken transitions "
+        "between items. Keep it comprehensive but concise."
     )
-    response.raise_for_status()
+
+
+def _current_affairs_state_path() -> str:
+    return os.path.join(os.path.dirname(__file__) or ".", "processed_state.json")
+
+
+def load_processed_state() -> set:
+    path = _current_affairs_state_path()
+    if not os.path.exists(path):
+        return set()
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return set(json.loads(fh.read() or "[]"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+
+
+def save_processed_state(processed: set) -> None:
+    path = _current_affairs_state_path()
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(sorted(processed)))
+    except OSError:
+        pass
+
+
+def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[str, bytes]:
+    if not _current_affairs_pipeline_enabled():
+        raise RuntimeError(
+            "Current affairs audio pipeline requires GEMINI_API_KEY, TELEGRAM_API_ID, "
+            "TELEGRAM_API_HASH, and TELEGRAM_CHAT"
+        )
+    if genai is None or types is None:
+        raise RuntimeError("google-genai package is not installed")
+    client = genai.Client(api_key=GEMINI_API_KEY)
+
+    pdf_part = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
+    response = client.models.generate_content(
+        model=GEMINI_TEXT_MODEL,
+        contents=[pdf_part, _current_affairs_summary_prompt()],
+    )
+    transcript = getattr(response, "text", "")
+    if not transcript:
+        raise RuntimeError(f"Gemini returned no text summary for {filename}")
+
+    tts_response = client.models.generate_content(
+        model=GEMINI_TTS_MODEL,
+        contents=transcript,
+        config=types.GenerateContentConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=GEMINI_TTS_VOICE)
+                )
+            ),
+        ),
+    )
+    pcm_data = tts_response.candidates[0].content.parts[0].inline_data.data
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(24000)
+        wf.writeframes(pcm_data)
+    return transcript, wav_buffer.getvalue()
+
+
+async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes]]:
+    if not TELEGRAM_API_ID or not TELEGRAM_API_HASH or not TELEGRAM_CHAT or TelegramClient is None:
+        return None
+    pattern = re.compile(TELEGRAM_FILE_REGEX, re.IGNORECASE)
+    processed = load_processed_state()
+
+    async with TelegramClient(TELEGRAM_SESSION_NAME, int(TELEGRAM_API_ID), TELEGRAM_API_HASH) as client:
+        async for message in client.iter_messages(TELEGRAM_CHAT, filter=InputMessagesFilterDocument()):
+            fname = message.file.name if message.file else None
+            if not fname or not pattern.match(fname):
+                continue
+            dedupe_key = f"{message.id}:{fname}"
+            if dedupe_key in processed:
+                continue
+            buffer = io.BytesIO()
+            await message.download_media(file=buffer)
+            buffer.seek(0)
+            processed.add(dedupe_key)
+            save_processed_state(processed)
+            return fname, buffer.getvalue()
+    return None
+
+
+async def send_current_affairs_reminder_email() -> None:
+    if not _current_affairs_pipeline_enabled():
+        return
+    result = await _fetch_latest_current_affairs_pdf()
+    if result is None:
+        return
+    filename, pdf_bytes = result
+    try:
+        transcript, audio_bytes = _generate_current_affairs_audio(pdf_bytes, filename)
+    except Exception:
+        return
+
+    subject = f"Current affairs audio brief - {filename}"
+    body = (
+        "Here is your current affairs audio briefing.\n\n"
+        f"Source: {filename}\n\n"
+        f"Transcript:\n{transcript[:4000]}"
+    )
+    if CAF_AUDIO_ATTACHED:
+        send_email(
+            subject,
+            body,
+            attachment_name=f"{os.path.splitext(filename)[0]}.wav",
+            attachment_bytes=audio_bytes,
+            attachment_mime="audio/wav",
+        )
+    else:
+        send_email(subject, body)
 
 
 # ---------------------------------------------------------------------------
@@ -536,9 +756,12 @@ scheduler = BackgroundScheduler(timezone=TZ)
 
 
 def job_block_reminder(activity: str, start: str, end: str) -> None:
+    if activity.lower().startswith("current affairs"):
+        try:
+            asyncio.run(send_current_affairs_reminder_email())
+        except Exception:
+            pass
     send_email(f"Next: {activity}", f"Next: {activity} - {start}-{end}")
-
-
 def job_daily_review_prompt() -> None:
     link = f"{APP_BASE_URL}/review" if APP_BASE_URL else "/review"
     send_email(
