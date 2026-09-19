@@ -34,9 +34,11 @@ load_dotenv()
 
 try:
     from telethon import TelegramClient
+    from telethon.sessions import StringSession
     from telethon.tl.types import InputMessagesFilterDocument
 except ImportError:  # pragma: no cover - optional runtime dependency
     TelegramClient = None
+    StringSession = None
     InputMessagesFilterDocument = None
 
 try:
@@ -69,6 +71,7 @@ GEMINI_TTS_VOICE = os.environ.get("GEMINI_TTS_VOICE", "Kore")
 TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID", "")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
 TELEGRAM_SESSION_NAME = os.environ.get("TELEGRAM_SESSION_NAME", "current_affairs_session")
+TELEGRAM_SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING", "")
 TELEGRAM_CHAT = os.environ.get("TELEGRAM_CHAT", "")
 TELEGRAM_FILE_REGEX = os.environ.get("TELEGRAM_FILE_REGEX", r"^CURRENT AFFAIRS.*\.pdf$")
 TELEGRAM_DELIVERY_CHAT = os.environ.get("TELEGRAM_DELIVERY_CHAT", "")
@@ -615,7 +618,13 @@ def send_email(subject: str, body: str, to: Optional[str] = None,
 
 
 def _current_affairs_pipeline_enabled() -> bool:
-    return bool(GEMINI_API_KEY and TELEGRAM_API_ID and TELEGRAM_API_HASH and TELEGRAM_CHAT)
+    return bool(
+        GEMINI_API_KEY
+        and TELEGRAM_API_ID
+        and TELEGRAM_API_HASH
+        and TELEGRAM_CHAT
+        and (TELEGRAM_SESSION_STRING or TELEGRAM_SESSION_NAME)
+    )
 
 
 def _current_affairs_summary_prompt() -> str:
@@ -696,12 +705,23 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
 
 
 async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes]]:
-    if not TELEGRAM_API_ID or not TELEGRAM_API_HASH or not TELEGRAM_CHAT or TelegramClient is None:
+    if (
+        not TELEGRAM_API_ID
+        or not TELEGRAM_API_HASH
+        or not TELEGRAM_CHAT
+        or TelegramClient is None
+        or (TELEGRAM_SESSION_STRING and StringSession is None)
+    ):
         return None
     pattern = re.compile(TELEGRAM_FILE_REGEX, re.IGNORECASE)
     processed = load_processed_state()
 
-    async with TelegramClient(TELEGRAM_SESSION_NAME, int(TELEGRAM_API_ID), TELEGRAM_API_HASH) as client:
+    session = (
+        StringSession(TELEGRAM_SESSION_STRING)
+        if TELEGRAM_SESSION_STRING
+        else TELEGRAM_SESSION_NAME
+    )
+    async with TelegramClient(session, int(TELEGRAM_API_ID), TELEGRAM_API_HASH) as client:
         async for message in client.iter_messages(TELEGRAM_CHAT, filter=InputMessagesFilterDocument()):
             fname = message.file.name if message.file else None
             if not fname or not pattern.match(fname):

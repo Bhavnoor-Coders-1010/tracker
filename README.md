@@ -43,6 +43,26 @@ email attachment through SMTP. The normal reminder email continues to use
 Resend. Optional overrides include `GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`,
 `GEMINI_TTS_VOICE`, and `TELEGRAM_FILE_REGEX`.
 
+### Telegram authentication on Render
+
+Do not perform the phone-number login from Render; Render cannot answer an
+interactive OTP prompt. Authenticate once on your local computer:
+
+```bash
+python telegram_session_setup.py
+```
+
+The command asks for the phone number, Telegram login code, and two-factor
+password if enabled. Copy the printed `TELEGRAM_SESSION_STRING` into the
+Render environment variables. Also set `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`,
+and `TELEGRAM_CHAT` there. The deployed app then reuses that authenticated
+session without asking for the phone number or OTP during normal restarts or
+deploys.
+
+Treat `TELEGRAM_SESSION_STRING` like a password. Never commit it or paste it
+into public logs. Telegram may require a new local login if the session is
+revoked, the account is logged out, or Telegram invalidates it.
+
 The `/setup` page accepts validated JSON for the timetable, exam dates, and
 monthly plan. Timetable blocks use stable `id` values; omitted IDs are
 generated automatically. Times are interpreted in `Asia/Kolkata`. The daily
