@@ -118,6 +118,14 @@ class TrackerDataTests(unittest.TestCase):
         self.assertEqual(subject, "Next: Current Affairs")
         self.assertIn("LBSNAA is waiting. Put in the work.", body)
 
+    def test_scheduler_status_does_not_expose_configuration_values(self):
+        response = app.scheduler_status()
+        self.assertEqual(response["timezone"], "Asia/Kolkata")
+        self.assertIn("running", response)
+        self.assertIn("jobs", response)
+        self.assertNotIn("GEMINI_API_KEY", response)
+        self.assertNotIn("SMTP_PASSWORD", response)
+
     def test_github_conflict_refreshes_sha_once(self):
         old_token, old_repo, old_sha = (
             app.GITHUB_TOKEN, app.GITHUB_DATA_REPO, app._sha_cache

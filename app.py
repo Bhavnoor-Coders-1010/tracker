@@ -14,6 +14,7 @@ import calendar
 import hashlib
 import html as html_module
 import io
+import logging
 import re
 import random
 import smtplib
@@ -32,6 +33,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field, ValidationError
 
 load_dotenv()
+logger = logging.getLogger("anushasan")
 
 try:
     from telethon import TelegramClient
@@ -713,6 +715,7 @@ async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes]]:
         or TelegramClient is None
         or (TELEGRAM_SESSION_STRING and StringSession is None)
     ):
+        logger.warning("Current-affairs PDF fetch is not configured or Telethon is unavailable")
         return None
     pattern = re.compile(TELEGRAM_FILE_REGEX, re.IGNORECASE)
     processed = load_processed_state()
@@ -735,12 +738,15 @@ async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes]]:
             buffer.seek(0)
             processed.add(dedupe_key)
             save_processed_state(processed)
+            logger.info("Fetched current-affairs PDF: %s", fname)
             return fname, buffer.getvalue()
+    logger.info("No unprocessed current-affairs PDF matched %s", TELEGRAM_FILE_REGEX)
     return None
 
 
 async def send_current_affairs_reminder_email() -> None:
     if not _current_affairs_pipeline_enabled():
+        logger.warning("Current-affairs pipeline skipped: required configuration is missing")
         return
     result = await _fetch_latest_current_affairs_pdf()
     if result is None:
@@ -748,7 +754,9 @@ async def send_current_affairs_reminder_email() -> None:
     filename, pdf_bytes = result
     try:
         transcript, audio_bytes = _generate_current_affairs_audio(pdf_bytes, filename)
+        logger.info("Generated current-affairs audio for %s", filename)
     except Exception:
+        logger.exception("Current-affairs summarization/TTS failed for %s", filename)
         return
 
     subject = f"Current affairs audio brief - {filename}"
@@ -767,6 +775,7 @@ async def send_current_affairs_reminder_email() -> None:
         )
     else:
         send_email(subject, body)
+    logger.info("Sent current-affairs email for %s", filename)
 
 
 # ---------------------------------------------------------------------------
@@ -819,13 +828,18 @@ def _block_reminder_email(activity: str, start: str, end: str) -> tuple[str, str
 
 
 def job_block_reminder(activity: str, start: str, end: str) -> None:
+    logger.info("Running timetable reminder: %s (%s-%s)", activity, start, end)
     if activity.lower().startswith("current affairs"):
         try:
             asyncio.run(send_current_affairs_reminder_email())
         except Exception:
-            pass
+            logger.exception("Current-affairs reminder job failed for %s", activity)
     subject, body = _block_reminder_email(activity, start, end)
-    send_email(subject, body)
+    try:
+        send_email(subject, body)
+        logger.info("Sent timetable reminder: %s", activity)
+    except Exception:
+        logger.exception("Timetable reminder email failed for %s", activity)
 
 
 def job_daily_review_prompt() -> None:
@@ -911,6 +925,7 @@ def job_monthly_nudge() -> None:
 def schedule_all_jobs() -> None:
     data = load_data()
     scheduler.remove_all_jobs()
+    scheduled_blocks = 0
 
     for day_name, blocks in data.get("timetable", {}).items():
         code = DAY_CODE.get(day_name)
@@ -933,6 +948,7 @@ def schedule_all_jobs() -> None:
                 args=[block["activity"], block["start"], block["end"]],
                 id=f"block_{reminder_code}_{block.get('id', index)}", replace_existing=True,
             )
+            scheduled_blocks += 1
 
     scheduler.add_job(job_daily_review_prompt, "cron",
                        hour=DAILY_REVIEW_HOUR, minute=DAILY_REVIEW_MINUTE,
@@ -943,6 +959,18 @@ def schedule_all_jobs() -> None:
                        id="exam_alerts", replace_existing=True)
     scheduler.add_job(job_monthly_nudge, "cron", day=1, hour=0, minute=5,
                        id="monthly_nudge", replace_existing=True)
+    logger.info(
+        "Scheduled %d timetable reminders in timezone %s; next jobs: %s",
+        scheduled_blocks,
+        TZ,
+        [
+            {
+                "id": job.id,
+                "next_run": str(job.next_run_time),
+            }
+            for job in scheduler.get_jobs()
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1352,6 +1380,23 @@ def test_email():
     return {"status": "sent"}
 
 
+@app.get("/scheduler-status")
+def scheduler_status():
+    """Return non-sensitive scheduler state for deployment diagnostics."""
+    return {
+        "timezone": str(TZ),
+        "now": datetime.now(TZ).isoformat(),
+        "running": scheduler.running,
+        "jobs": [
+            {
+                "id": job.id,
+                "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
+            }
+            for job in scheduler.get_jobs()
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # ---- SECTION: Startup ----
 # ---------------------------------------------------------------------------
@@ -1360,6 +1405,7 @@ def on_startup():
     load_data()
     schedule_all_jobs()
     scheduler.start()
+    logger.info("Scheduler started in timezone %s", TZ)
 
 
 if __name__ == "__main__":
