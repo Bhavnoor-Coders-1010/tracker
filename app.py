@@ -960,13 +960,13 @@ def schedule_all_jobs() -> None:
     scheduler.add_job(job_monthly_nudge, "cron", day=1, hour=0, minute=5,
                        id="monthly_nudge", replace_existing=True)
     logger.info(
-        "Scheduled %d timetable reminders in timezone %s; next jobs: %s",
+        "Scheduled %d timetable reminders in timezone %s; jobs: %s",
         scheduled_blocks,
         TZ,
         [
             {
                 "id": job.id,
-                "next_run": str(job.next_run_time),
+                "trigger": str(job.trigger),
             }
             for job in scheduler.get_jobs()
         ],

@@ -126,6 +126,18 @@ class TrackerDataTests(unittest.TestCase):
         self.assertNotIn("GEMINI_API_KEY", response)
         self.assertNotIn("SMTP_PASSWORD", response)
 
+    def test_schedule_all_jobs_is_safe_before_scheduler_starts(self):
+        was_running = app.scheduler.running
+        try:
+            if was_running:
+                app.scheduler.shutdown(wait=False)
+            app.schedule_all_jobs()
+            self.assertTrue(app.scheduler.get_jobs())
+        finally:
+            app.scheduler.remove_all_jobs()
+            if was_running:
+                app.scheduler.start()
+
     def test_github_conflict_refreshes_sha_once(self):
         old_token, old_repo, old_sha = (
             app.GITHUB_TOKEN, app.GITHUB_DATA_REPO, app._sha_cache
