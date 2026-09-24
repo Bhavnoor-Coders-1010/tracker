@@ -19,6 +19,7 @@ import re
 import random
 import smtplib
 import threading
+import time
 import wave
 from datetime import datetime, date, timedelta
 from email.message import EmailMessage
@@ -69,8 +70,11 @@ APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 # Current-affairs audio reminder pipeline configuration
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_TEXT_MODEL = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+GEMINI_TEXT_FALLBACK_MODEL = os.environ.get("GEMINI_TEXT_FALLBACK_MODEL", "")
 GEMINI_TTS_MODEL = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 GEMINI_TTS_VOICE = os.environ.get("GEMINI_TTS_VOICE", "Kore")
+GEMINI_RETRY_ATTEMPTS = max(1, int(os.environ.get("GEMINI_RETRY_ATTEMPTS", "4")))
+GEMINI_RETRY_DELAY_SECONDS = max(1, int(os.environ.get("GEMINI_RETRY_DELAY_SECONDS", "5")))
 TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID", "")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
 TELEGRAM_SESSION_NAME = os.environ.get("TELEGRAM_SESSION_NAME", "current_affairs_session")
@@ -666,6 +670,36 @@ def save_processed_state(processed: set) -> None:
         pass
 
 
+def _is_retryable_gemini_error(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if status_code is None:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+    return status_code in {429, 500, 502, 503, 504}
+
+
+def _gemini_generate_content(client, model: str, **kwargs):
+    last_error = None
+    for attempt in range(1, GEMINI_RETRY_ATTEMPTS + 1):
+        try:
+            return client.models.generate_content(model=model, **kwargs)
+        except Exception as exc:
+            last_error = exc
+            if not _is_retryable_gemini_error(exc) or attempt == GEMINI_RETRY_ATTEMPTS:
+                raise
+            delay = GEMINI_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+            logger.warning(
+                "Gemini model %s returned a transient error on attempt %d/%d; "
+                "retrying in %ds",
+                model,
+                attempt,
+                GEMINI_RETRY_ATTEMPTS,
+                delay,
+            )
+            time.sleep(delay)
+    raise last_error
+
+
 def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[str, bytes]:
     if not _current_affairs_pipeline_enabled():
         raise RuntimeError(
@@ -677,16 +711,32 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
     client = genai.Client(api_key=GEMINI_API_KEY)
 
     pdf_part = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
-    response = client.models.generate_content(
-        model=GEMINI_TEXT_MODEL,
-        contents=[pdf_part, _current_affairs_summary_prompt()],
-    )
+    try:
+        response = _gemini_generate_content(
+            client,
+            GEMINI_TEXT_MODEL,
+            contents=[pdf_part, _current_affairs_summary_prompt()],
+        )
+    except Exception as exc:
+        if not GEMINI_TEXT_FALLBACK_MODEL or not _is_retryable_gemini_error(exc):
+            raise
+        logger.warning(
+            "Primary Gemini text model %s remained unavailable; trying fallback %s",
+            GEMINI_TEXT_MODEL,
+            GEMINI_TEXT_FALLBACK_MODEL,
+        )
+        response = _gemini_generate_content(
+            client,
+            GEMINI_TEXT_FALLBACK_MODEL,
+            contents=[pdf_part, _current_affairs_summary_prompt()],
+        )
     transcript = getattr(response, "text", "")
     if not transcript:
         raise RuntimeError(f"Gemini returned no text summary for {filename}")
 
-    tts_response = client.models.generate_content(
-        model=GEMINI_TTS_MODEL,
+    tts_response = _gemini_generate_content(
+        client,
+        GEMINI_TTS_MODEL,
         contents=transcript,
         config=types.GenerateContentConfig(
             response_modalities=["AUDIO"],
@@ -707,7 +757,7 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
     return transcript, wav_buffer.getvalue()
 
 
-async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes]]:
+async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes, str]]:
     if (
         not TELEGRAM_API_ID
         or not TELEGRAM_API_HASH
@@ -736,10 +786,8 @@ async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes]]:
             buffer = io.BytesIO()
             await message.download_media(file=buffer)
             buffer.seek(0)
-            processed.add(dedupe_key)
-            save_processed_state(processed)
             logger.info("Fetched current-affairs PDF: %s", fname)
-            return fname, buffer.getvalue()
+            return fname, buffer.getvalue(), dedupe_key
     logger.info("No unprocessed current-affairs PDF matched %s", TELEGRAM_FILE_REGEX)
     return None
 
@@ -751,7 +799,7 @@ async def send_current_affairs_reminder_email() -> None:
     result = await _fetch_latest_current_affairs_pdf()
     if result is None:
         return
-    filename, pdf_bytes = result
+    filename, pdf_bytes, dedupe_key = result
     try:
         transcript, audio_bytes = _generate_current_affairs_audio(pdf_bytes, filename)
         logger.info("Generated current-affairs audio for %s", filename)
@@ -775,6 +823,9 @@ async def send_current_affairs_reminder_email() -> None:
         )
     else:
         send_email(subject, body)
+    processed = load_processed_state()
+    processed.add(dedupe_key)
+    save_processed_state(processed)
     logger.info("Sent current-affairs email for %s", filename)
 
 

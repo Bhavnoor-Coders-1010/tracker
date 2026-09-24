@@ -126,6 +126,16 @@ class TrackerDataTests(unittest.TestCase):
         self.assertNotIn("GEMINI_API_KEY", response)
         self.assertNotIn("SMTP_PASSWORD", response)
 
+    def test_retryable_gemini_status_codes_are_detected(self):
+        class GeminiError(Exception):
+            status_code = 503
+
+        class PermanentGeminiError(Exception):
+            status_code = 404
+
+        self.assertTrue(app._is_retryable_gemini_error(GeminiError()))
+        self.assertFalse(app._is_retryable_gemini_error(PermanentGeminiError()))
+
     def test_schedule_all_jobs_is_safe_before_scheduler_starts(self):
         was_running = app.scheduler.running
         try:
