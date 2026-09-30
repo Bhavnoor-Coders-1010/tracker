@@ -28,10 +28,6 @@ GEMINI_API_KEY
 TELEGRAM_API_ID
 TELEGRAM_API_HASH
 TELEGRAM_CHAT
-SMTP_HOST
-SMTP_PORT                 # usually 587
-SMTP_USER
-SMTP_PASSWORD
 CAF_AUDIO_ATTACHED        # true by default
 ```
 
@@ -39,16 +35,17 @@ The Telegram chat should contain PDFs whose names match `TELEGRAM_FILE_REGEX`
 (by default, `CURRENT AFFAIRS*.pdf`). Five minutes before a timetable block
 whose activity starts with `Current Affairs`, the app checks for a new matching
 PDF, summarizes it with Gemini, generates a WAV briefing, and sends it as an
-email attachment through SMTP. The normal reminder email continues to use
-Resend. Optional overrides include `GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`,
-`GEMINI_TTS_VOICE`, and `TELEGRAM_FILE_REGEX`.
+email attachment through Resend's HTTPS API. The normal reminder email uses the
+same API. Optional overrides include `GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`,
+`GEMINI_TTS_VOICE`, and `TELEGRAM_FILE_REGEX`. Resend requires `EMAIL_FROM` to
+be an allowed sender; verify a domain in Resend for production use.
 
 Gemini transient capacity errors such as HTTP 503 are retried with exponential
 backoff. Configure `GEMINI_RETRY_ATTEMPTS` and
 `GEMINI_RETRY_DELAY_SECONDS` if needed. `GEMINI_TEXT_FALLBACK_MODEL` is
 optional; set it only to a text model that is available to your Gemini API key.
 The Telegram PDF is marked processed only after the audio email succeeds, so a
-temporary Gemini or SMTP failure can be retried by the next reminder.
+temporary Gemini or email-provider failure can be retried by the next reminder.
 
 ### Telegram authentication on Render
 

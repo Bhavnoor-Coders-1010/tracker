@@ -17,12 +17,10 @@ import io
 import logging
 import re
 import random
-import smtplib
 import threading
 import time
 import wave
 from datetime import datetime, date, timedelta
-from email.message import EmailMessage
 from typing import Optional, List
 from zoneinfo import ZoneInfo
 
@@ -565,58 +563,38 @@ def send_email(subject: str, body: str, to: Optional[str] = None,
     if not EMAIL_FROM or not to:
         print(f"[email skipped - missing EMAIL_FROM/recipient] {subject}")
         return
-
-    if attachment_path is None and attachment_bytes is None:
-        if not RESEND_API_KEY:
-            print(f"[email skipped - missing RESEND_API_KEY] {subject}")
-            return
-        response = requests.post(
-            RESEND_API_URL,
-            headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Authorization": "Bearer " + RESEND_API_KEY,
-                "Content-Type": "application/json",
-            },
-            json={"from": EMAIL_FROM, "to": [to], "subject": subject, "text": body},
-            timeout=15,
-        )
-        response.raise_for_status()
+    if not RESEND_API_KEY:
+        print(f"[email skipped - missing RESEND_API_KEY] {subject}")
         return
+    if attachment_bytes is not None and attachment_path is not None:
+        raise ValueError("Specify only one of attachment_path or attachment_bytes")
 
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_password = os.environ.get("SMTP_PASSWORD")
-    if not all([smtp_host, smtp_user, smtp_password]):
-        raise RuntimeError("SMTP_HOST/SMTP_USER/SMTP_PASSWORD must be set for attachment emails")
-
-    msg = EmailMessage()
-    msg["From"] = EMAIL_FROM
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.set_content(body)
-
-    if attachment_bytes is not None:
-        msg.add_attachment(
-            attachment_bytes,
-            maintype="audio" if "audio" in attachment_mime else "application",
-            subtype=attachment_mime.split("/")[-1] if "/" in attachment_mime else "octet-stream",
-            filename=attachment_name or "attachment",
-        )
-    elif attachment_path:
+    payload = {
+        "from": EMAIL_FROM,
+        "to": [to],
+        "subject": subject,
+        "text": body,
+    }
+    if attachment_path:
         with open(attachment_path, "rb") as fh:
-            payload = fh.read()
-        msg.add_attachment(
-            payload,
-            maintype="audio" if "audio" in attachment_mime else "application",
-            subtype=attachment_mime.split("/")[-1] if "/" in attachment_mime else "octet-stream",
-            filename=attachment_name or os.path.basename(attachment_path),
-        )
+            attachment_bytes = fh.read()
+        attachment_name = attachment_name or os.path.basename(attachment_path)
+    if attachment_bytes is not None:
+        payload["attachments"] = [{
+            "filename": attachment_name or "attachment",
+            "content": base64.b64encode(attachment_bytes).decode("ascii"),
+        }]
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_password)
-        server.send_message(msg)
+    response = requests.post(
+        RESEND_API_URL,
+        headers={
+            "Authorization": "Bearer " + RESEND_API_KEY,
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=15,
+    )
+    response.raise_for_status()
 
 
 # ---------------------------------------------------------------------------

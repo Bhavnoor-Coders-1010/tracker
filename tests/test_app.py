@@ -94,6 +94,29 @@ class TrackerDataTests(unittest.TestCase):
         finally:
             app.RESEND_API_KEY, app.EMAIL_FROM, app.NOTIFY_TO = old
 
+    def test_send_email_uses_resend_attachment(self):
+        old = app.RESEND_API_KEY, app.EMAIL_FROM, app.NOTIFY_TO
+        try:
+            app.RESEND_API_KEY = "test-key"
+            app.EMAIL_FROM = "onboarding@resend.dev"
+            app.NOTIFY_TO = "me@example.com"
+            response = Mock(status_code=200)
+            with patch.object(app.requests, "post", return_value=response) as post:
+                app.send_email(
+                    "Audio brief",
+                    "Transcript",
+                    attachment_bytes=b"RIFF audio",
+                    attachment_name="brief.wav",
+                    attachment_mime="audio/wav",
+                )
+            payload = post.call_args.kwargs["json"]
+            self.assertEqual(payload["attachments"], [{
+                "filename": "brief.wav",
+                "content": base64.b64encode(b"RIFF audio").decode("ascii"),
+            }])
+        finally:
+            app.RESEND_API_KEY, app.EMAIL_FROM, app.NOTIFY_TO = old
+
     def test_block_reminder_email_uses_general_motivation(self):
         with patch.object(app.random, "choice", return_value="Done is better than perfect."):
             subject, body = app._block_reminder_email("Courses", "10:00", "11:00")
