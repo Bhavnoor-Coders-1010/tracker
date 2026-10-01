@@ -48,6 +48,10 @@ The recommended text setup is `gemini-3.6-flash` as the primary model and
 retired or unavailable primary model immediately activates the fallback without
 retrying the invalid model. Set the fallback only to a model available to your
 Gemini API key.
+For TTS, `gemini-2.5-flash-preview-tts` is the primary model and
+`gemini-2.5-pro-preview-tts` is the fallback through
+`GEMINI_TTS_FALLBACK_MODEL`. TTS timeouts and unavailable-model responses use
+the same bounded fallback behavior.
 The Telegram PDF is marked processed only after the audio email succeeds, so a
 temporary Gemini or email-provider failure can be retried by the next reminder.
 

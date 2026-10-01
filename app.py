@@ -72,6 +72,9 @@ GEMINI_TEXT_FALLBACK_MODEL = os.environ.get(
     "GEMINI_TEXT_FALLBACK_MODEL", "gemini-3.5-flash-lite"
 )
 GEMINI_TTS_MODEL = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+GEMINI_TTS_FALLBACK_MODEL = os.environ.get(
+    "GEMINI_TTS_FALLBACK_MODEL", "gemini-2.5-pro-preview-tts"
+)
 GEMINI_TTS_VOICE = os.environ.get("GEMINI_TTS_VOICE", "Kore")
 GEMINI_RETRY_ATTEMPTS = max(1, int(os.environ.get("GEMINI_RETRY_ATTEMPTS", "4")))
 GEMINI_RETRY_DELAY_SECONDS = max(1, int(os.environ.get("GEMINI_RETRY_DELAY_SECONDS", "5")))
@@ -741,19 +744,44 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
     if not transcript:
         raise RuntimeError(f"Gemini returned no text summary for {filename}")
 
-    tts_response = _gemini_generate_content(
-        client,
-        GEMINI_TTS_MODEL,
-        contents=transcript,
-        config=types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=GEMINI_TTS_VOICE)
+    tts_config = types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                    voice_name=GEMINI_TTS_VOICE
                 )
-            ),
+            )
         ),
     )
+    try:
+        tts_response = _gemini_generate_content(
+            client,
+            GEMINI_TTS_MODEL,
+            contents=transcript,
+            config=tts_config,
+        )
+    except Exception as exc:
+        if (
+            not GEMINI_TTS_FALLBACK_MODEL
+            or (
+                not _is_retryable_gemini_error(exc)
+                and not _is_unavailable_gemini_model_error(exc)
+            )
+            or GEMINI_TTS_FALLBACK_MODEL == GEMINI_TTS_MODEL
+        ):
+            raise
+        logger.warning(
+            "Primary Gemini TTS model %s remained unavailable; trying fallback %s",
+            GEMINI_TTS_MODEL,
+            GEMINI_TTS_FALLBACK_MODEL,
+        )
+        tts_response = _gemini_generate_content(
+            client,
+            GEMINI_TTS_FALLBACK_MODEL,
+            contents=transcript,
+            config=tts_config,
+        )
     pcm_data = tts_response.candidates[0].content.parts[0].inline_data.data
     wav_buffer = io.BytesIO()
     with wave.open(wav_buffer, "wb") as wf:

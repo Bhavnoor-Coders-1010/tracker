@@ -173,6 +173,9 @@ class TrackerDataTests(unittest.TestCase):
     def test_gemini_timeout_is_retryable(self):
         self.assertTrue(app._is_retryable_gemini_error(TimeoutError()))
 
+    def test_gemini_tts_fallback_is_distinct_from_primary(self):
+        self.assertNotEqual(app.GEMINI_TTS_MODEL, app.GEMINI_TTS_FALLBACK_MODEL)
+
     def test_schedule_all_jobs_is_safe_before_scheduler_starts(self):
         was_running = app.scheduler.running
         try:
