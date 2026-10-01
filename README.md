@@ -40,10 +40,14 @@ same API. Optional overrides include `GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`,
 `GEMINI_TTS_VOICE`, and `TELEGRAM_FILE_REGEX`. Resend requires `EMAIL_FROM` to
 be an allowed sender; verify a domain in Resend for production use.
 
-Gemini transient capacity errors such as HTTP 503 are retried with exponential
-backoff. Configure `GEMINI_RETRY_ATTEMPTS` and
-`GEMINI_RETRY_DELAY_SECONDS` if needed. `GEMINI_TEXT_FALLBACK_MODEL` is
-optional; set it only to a text model that is available to your Gemini API key.
+Gemini transient capacity errors such as HTTP 503 and request timeouts are
+retried with exponential backoff. Configure `GEMINI_RETRY_ATTEMPTS`,
+`GEMINI_RETRY_DELAY_SECONDS`, and `GEMINI_HTTP_TIMEOUT_MS` if needed.
+The recommended text setup is `gemini-3.6-flash` as the primary model and
+`gemini-3.5-flash-lite` as `GEMINI_TEXT_FALLBACK_MODEL`. A definitive 404 for a
+retired or unavailable primary model immediately activates the fallback without
+retrying the invalid model. Set the fallback only to a model available to your
+Gemini API key.
 The Telegram PDF is marked processed only after the audio email succeeds, so a
 temporary Gemini or email-provider failure can be retried by the next reminder.
 

@@ -21,6 +21,12 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_TEXT_MODEL
+        value: gemini-3.6-flash
+      - key: GEMINI_TEXT_FALLBACK_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_HTTP_TIMEOUT_MS
+        value: "120000"
       - key: TELEGRAM_API_ID
         sync: false
       - key: TELEGRAM_API_HASH

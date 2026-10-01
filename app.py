@@ -67,12 +67,17 @@ APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 
 # Current-affairs audio reminder pipeline configuration
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_TEXT_MODEL = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
-GEMINI_TEXT_FALLBACK_MODEL = os.environ.get("GEMINI_TEXT_FALLBACK_MODEL", "")
+GEMINI_TEXT_MODEL = os.environ.get("GEMINI_TEXT_MODEL", "gemini-3.6-flash")
+GEMINI_TEXT_FALLBACK_MODEL = os.environ.get(
+    "GEMINI_TEXT_FALLBACK_MODEL", "gemini-3.5-flash-lite"
+)
 GEMINI_TTS_MODEL = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 GEMINI_TTS_VOICE = os.environ.get("GEMINI_TTS_VOICE", "Kore")
 GEMINI_RETRY_ATTEMPTS = max(1, int(os.environ.get("GEMINI_RETRY_ATTEMPTS", "4")))
 GEMINI_RETRY_DELAY_SECONDS = max(1, int(os.environ.get("GEMINI_RETRY_DELAY_SECONDS", "5")))
+GEMINI_HTTP_TIMEOUT_MS = max(
+    1000, int(os.environ.get("GEMINI_HTTP_TIMEOUT_MS", "120000"))
+)
 TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID", "")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
 TELEGRAM_SESSION_NAME = os.environ.get("TELEGRAM_SESSION_NAME", "current_affairs_session")
@@ -653,7 +658,24 @@ def _is_retryable_gemini_error(exc: Exception) -> bool:
     if status_code is None:
         response = getattr(exc, "response", None)
         status_code = getattr(response, "status_code", None)
-    return status_code in {429, 500, 502, 503, 504}
+    if status_code in {429, 500, 502, 503, 504}:
+        return True
+    return exc.__class__.__name__ in {
+        "TimeoutError",
+        "TimeoutException",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "WriteTimeout",
+        "PoolTimeout",
+    }
+
+
+def _is_unavailable_gemini_model_error(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if status_code is None:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+    return status_code == 404
 
 
 def _gemini_generate_content(client, model: str, **kwargs):
@@ -686,7 +708,10 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
         )
     if genai is None or types is None:
         raise RuntimeError("google-genai package is not installed")
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options=types.HttpOptions(timeout=GEMINI_HTTP_TIMEOUT_MS),
+    )
 
     pdf_part = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
     try:
@@ -696,7 +721,11 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
             contents=[pdf_part, _current_affairs_summary_prompt()],
         )
     except Exception as exc:
-        if not GEMINI_TEXT_FALLBACK_MODEL or not _is_retryable_gemini_error(exc):
+        if (
+            not GEMINI_TEXT_FALLBACK_MODEL
+            or not _is_retryable_gemini_error(exc)
+            and not _is_unavailable_gemini_model_error(exc)
+        ):
             raise
         logger.warning(
             "Primary Gemini text model %s remained unavailable; trying fallback %s",

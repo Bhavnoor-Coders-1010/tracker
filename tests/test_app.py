@@ -159,6 +159,20 @@ class TrackerDataTests(unittest.TestCase):
         self.assertTrue(app._is_retryable_gemini_error(GeminiError()))
         self.assertFalse(app._is_retryable_gemini_error(PermanentGeminiError()))
 
+    def test_gemini_model_not_found_is_eligible_for_fallback(self):
+        class GeminiModelRetiredError(Exception):
+            status_code = 404
+
+        self.assertTrue(app._is_unavailable_gemini_model_error(
+            GeminiModelRetiredError()
+        ))
+        self.assertFalse(app._is_retryable_gemini_error(
+            GeminiModelRetiredError()
+        ))
+
+    def test_gemini_timeout_is_retryable(self):
+        self.assertTrue(app._is_retryable_gemini_error(TimeoutError()))
+
     def test_schedule_all_jobs_is_safe_before_scheduler_starts(self):
         was_running = app.scheduler.running
         try:
