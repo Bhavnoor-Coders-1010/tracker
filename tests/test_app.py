@@ -176,6 +176,24 @@ class TrackerDataTests(unittest.TestCase):
     def test_gemini_tts_fallback_is_distinct_from_primary(self):
         self.assertNotEqual(app.GEMINI_TTS_MODEL, app.GEMINI_TTS_FALLBACK_MODEL)
 
+    def test_pcm_to_wav_returns_readable_audio(self):
+        audio = app._pcm_to_wav(b"\x00\x00" * 100)
+        with app.wave.open(app.io.BytesIO(audio), "rb") as wav_file:
+            self.assertEqual(wav_file.getnframes(), 100)
+
+    def test_pyttsx3_wav_validates_generated_audio(self):
+        fake_audio = app._pcm_to_wav(b"\x00\x00" * 10)
+        engine = Mock()
+        with patch.object(app, "pyttsx3") as pyttsx3_module, \
+                patch("os.path.isfile", return_value=True), \
+                patch("builtins.open", create=True) as open_file:
+            pyttsx3_module.init.return_value = engine
+            open_file.return_value.__enter__.return_value.read.return_value = fake_audio
+            self.assertEqual(app._generate_pyttsx3_wav("hello"), fake_audio)
+        engine.save_to_file.assert_called_once()
+        engine.runAndWait.assert_called_once()
+        engine.stop.assert_called_once()
+
     def test_schedule_all_jobs_is_safe_before_scheduler_starts(self):
         was_running = app.scheduler.running
         try:

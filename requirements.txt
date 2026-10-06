@@ -6,3 +6,4 @@ python-multipart
 python-dotenv
 google-genai
 telethon
+pyttsx3

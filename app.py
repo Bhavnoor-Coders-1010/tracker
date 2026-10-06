@@ -17,6 +17,7 @@ import io
 import logging
 import re
 import random
+import tempfile
 import threading
 import time
 import wave
@@ -50,6 +51,11 @@ except ImportError:  # pragma: no cover - optional runtime dependency
     genai = None
     types = None
 
+try:
+    import pyttsx3
+except ImportError:  # pragma: no cover - optional runtime dependency
+    pyttsx3 = None
+
 TZ = ZoneInfo("Asia/Kolkata")
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
@@ -75,6 +81,9 @@ GEMINI_TTS_MODEL = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-
 GEMINI_TTS_FALLBACK_MODEL = os.environ.get(
     "GEMINI_TTS_FALLBACK_MODEL", "gemini-2.5-pro-preview-tts"
 )
+PYTTSX3_FALLBACK_ENABLED = os.environ.get(
+    "PYTTSX3_FALLBACK_ENABLED", "true"
+).lower() in {"1", "true", "yes"}
 GEMINI_TTS_VOICE = os.environ.get("GEMINI_TTS_VOICE", "Kore")
 GEMINI_RETRY_ATTEMPTS = max(1, int(os.environ.get("GEMINI_RETRY_ATTEMPTS", "4")))
 GEMINI_RETRY_DELAY_SECONDS = max(1, int(os.environ.get("GEMINI_RETRY_DELAY_SECONDS", "5")))
@@ -703,6 +712,70 @@ def _gemini_generate_content(client, model: str, **kwargs):
     raise last_error
 
 
+def _pcm_to_wav(pcm_data: bytes) -> bytes:
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(24000)
+        wf.writeframes(pcm_data)
+    return wav_buffer.getvalue()
+
+
+def _generate_pyttsx3_wav(transcript: str) -> bytes:
+    if pyttsx3 is None:
+        raise RuntimeError("pyttsx3 is not installed")
+    with tempfile.TemporaryDirectory(prefix="anushasan-tts-") as temp_dir:
+        output_path = os.path.join(temp_dir, "brief.wav")
+        engine = pyttsx3.init()
+        try:
+            engine.save_to_file(transcript, output_path)
+            engine.runAndWait()
+        finally:
+            engine.stop()
+        if not os.path.isfile(output_path):
+            raise RuntimeError("pyttsx3 did not create an audio file")
+        with open(output_path, "rb") as audio_file:
+            audio_bytes = audio_file.read()
+    if not audio_bytes:
+        raise RuntimeError("pyttsx3 created an empty audio file")
+    with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
+        if wav_file.getnframes() <= 0:
+            raise RuntimeError("pyttsx3 created a WAV file with no audio frames")
+    return audio_bytes
+
+
+def _generate_gemini_tts_wav(client, transcript: str, tts_config) -> bytes:
+    tts_error = None
+    models = []
+    for model in (GEMINI_TTS_MODEL, GEMINI_TTS_FALLBACK_MODEL):
+        if model and model not in models:
+            models.append(model)
+    for model in models:
+        if not model:
+            continue
+        try:
+            tts_response = _gemini_generate_content(
+                client,
+                model,
+                contents=transcript,
+                config=tts_config,
+            )
+            pcm_data = tts_response.candidates[0].content.parts[0].inline_data.data
+            return _pcm_to_wav(pcm_data)
+        except Exception as exc:
+            tts_error = exc
+            logger.warning("Gemini TTS model %s failed: %s", model, exc)
+            if model == GEMINI_TTS_MODEL and len(models) > 1:
+                logger.warning(
+                    "Trying Gemini TTS fallback model %s",
+                    models[1],
+                )
+    if tts_error is None:
+        raise RuntimeError("No Gemini TTS model is configured")
+    raise tts_error
+
+
 def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[str, bytes]:
     if not _current_affairs_pipeline_enabled():
         raise RuntimeError(
@@ -755,41 +828,19 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
         ),
     )
     try:
-        tts_response = _gemini_generate_content(
-            client,
-            GEMINI_TTS_MODEL,
-            contents=transcript,
-            config=tts_config,
-        )
-    except Exception as exc:
-        if (
-            not GEMINI_TTS_FALLBACK_MODEL
-            or (
-                not _is_retryable_gemini_error(exc)
-                and not _is_unavailable_gemini_model_error(exc)
-            )
-            or GEMINI_TTS_FALLBACK_MODEL == GEMINI_TTS_MODEL
-        ):
+        return transcript, _generate_gemini_tts_wav(client, transcript, tts_config)
+    except Exception:
+        logger.exception("Gemini TTS providers failed for %s", filename)
+        if not PYTTSX3_FALLBACK_ENABLED:
             raise
-        logger.warning(
-            "Primary Gemini TTS model %s remained unavailable; trying fallback %s",
-            GEMINI_TTS_MODEL,
-            GEMINI_TTS_FALLBACK_MODEL,
-        )
-        tts_response = _gemini_generate_content(
-            client,
-            GEMINI_TTS_FALLBACK_MODEL,
-            contents=transcript,
-            config=tts_config,
-        )
-    pcm_data = tts_response.candidates[0].content.parts[0].inline_data.data
-    wav_buffer = io.BytesIO()
-    with wave.open(wav_buffer, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(24000)
-        wf.writeframes(pcm_data)
-    return transcript, wav_buffer.getvalue()
+        try:
+            audio_bytes = _generate_pyttsx3_wav(transcript)
+            logger.info("Generated current-affairs audio with pyttsx3 for %s", filename)
+            return transcript, audio_bytes
+        except Exception as exc:
+            raise RuntimeError(
+                "Gemini TTS and pyttsx3 fallback both failed"
+            ) from exc
 
 
 async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes, str]]:

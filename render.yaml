@@ -3,7 +3,7 @@ services:
     name: tracker
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: apt-get update && apt-get install -y espeak-ng espeak-ng-data && pip install -r requirements.txt
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
@@ -29,6 +29,8 @@ services:
         value: gemini-2.5-pro-preview-tts
       - key: GEMINI_HTTP_TIMEOUT_MS
         value: "120000"
+      - key: PYTTSX3_FALLBACK_ENABLED
+        value: "true"
       - key: TELEGRAM_API_ID
         sync: false
       - key: TELEGRAM_API_HASH
