@@ -52,15 +52,12 @@ For TTS, `gemini-2.5-flash-preview-tts` is the primary model and
 `gemini-2.5-pro-preview-tts` is the fallback through
 `GEMINI_TTS_FALLBACK_MODEL`. TTS timeouts and unavailable-model responses use
 the same bounded fallback behavior.
-If both Gemini TTS models fail, the app uses local `pyttsx3` as a final
-fallback when `PYTTSX3_FALLBACK_ENABLED=true`. Render installs `espeak-ng` for
-this fallback; its voice quality is lower than Gemini TTS, but it avoids losing
-the audio email when Gemini TTS is unavailable. If all TTS providers fail, the
-PDF remains unprocessed and the next reminder can retry it.
-
-The Render service uses the repository `Dockerfile` because Render's native
-Python build environment does not permit `apt-get` to install system packages.
-Do not add an `apt-get` command to the native Python build-command field.
+If both Gemini TTS models fail, the app uses gTTS as a final fallback. Configure
+its language with `GTTS_LANGUAGE` (default `en`). gTTS requires outbound
+internet access, writes MP3 rather than WAV, and may be throttled because it
+uses the Google Translate speech endpoint. Gemini output is attached as WAV;
+gTTS output is attached as MP3. If all TTS providers fail, the PDF remains
+unprocessed and the next reminder can retry it.
 The Telegram PDF is marked processed only after the audio email succeeds, so a
 temporary Gemini or email-provider failure can be retried by the next reminder.
 

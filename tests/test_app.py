@@ -181,18 +181,16 @@ class TrackerDataTests(unittest.TestCase):
         with app.wave.open(app.io.BytesIO(audio), "rb") as wav_file:
             self.assertEqual(wav_file.getnframes(), 100)
 
-    def test_pyttsx3_wav_validates_generated_audio(self):
-        fake_audio = app._pcm_to_wav(b"\x00\x00" * 10)
-        engine = Mock()
-        with patch.object(app, "pyttsx3") as pyttsx3_module, \
-                patch("os.path.isfile", return_value=True), \
-                patch("builtins.open", create=True) as open_file:
-            pyttsx3_module.init.return_value = engine
-            open_file.return_value.__enter__.return_value.read.return_value = fake_audio
-            self.assertEqual(app._generate_pyttsx3_wav("hello"), fake_audio)
-        engine.save_to_file.assert_called_once()
-        engine.runAndWait.assert_called_once()
-        engine.stop.assert_called_once()
+    def test_gtts_generates_nonempty_mp3(self):
+        fake_audio = b"ID3 fake mp3"
+        gtts_instance = Mock()
+        gtts_instance.write_to_fp.side_effect = (
+            lambda output: output.write(fake_audio)
+        )
+        with patch.object(app, "gTTS", return_value=gtts_instance) as gtts:
+            self.assertEqual(app._generate_gtts_mp3("hello"), fake_audio)
+        gtts.assert_called_once_with(text="hello", lang=app.GTTS_LANGUAGE, slow=False)
+        gtts_instance.write_to_fp.assert_called_once()
 
     def test_schedule_all_jobs_is_safe_before_scheduler_starts(self):
         was_running = app.scheduler.running

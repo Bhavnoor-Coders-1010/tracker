@@ -17,7 +17,6 @@ import io
 import logging
 import re
 import random
-import tempfile
 import threading
 import time
 import wave
@@ -52,9 +51,9 @@ except ImportError:  # pragma: no cover - optional runtime dependency
     types = None
 
 try:
-    import pyttsx3
+    from gtts import gTTS
 except ImportError:  # pragma: no cover - optional runtime dependency
-    pyttsx3 = None
+    gTTS = None
 
 TZ = ZoneInfo("Asia/Kolkata")
 
@@ -81,9 +80,7 @@ GEMINI_TTS_MODEL = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-
 GEMINI_TTS_FALLBACK_MODEL = os.environ.get(
     "GEMINI_TTS_FALLBACK_MODEL", "gemini-2.5-pro-preview-tts"
 )
-PYTTSX3_FALLBACK_ENABLED = os.environ.get(
-    "PYTTSX3_FALLBACK_ENABLED", "true"
-).lower() in {"1", "true", "yes"}
+GTTS_LANGUAGE = os.environ.get("GTTS_LANGUAGE", "en")
 GEMINI_TTS_VOICE = os.environ.get("GEMINI_TTS_VOICE", "Kore")
 GEMINI_RETRY_ATTEMPTS = max(1, int(os.environ.get("GEMINI_RETRY_ATTEMPTS", "4")))
 GEMINI_RETRY_DELAY_SECONDS = max(1, int(os.environ.get("GEMINI_RETRY_DELAY_SECONDS", "5")))
@@ -722,26 +719,14 @@ def _pcm_to_wav(pcm_data: bytes) -> bytes:
     return wav_buffer.getvalue()
 
 
-def _generate_pyttsx3_wav(transcript: str) -> bytes:
-    if pyttsx3 is None:
-        raise RuntimeError("pyttsx3 is not installed")
-    with tempfile.TemporaryDirectory(prefix="anushasan-tts-") as temp_dir:
-        output_path = os.path.join(temp_dir, "brief.wav")
-        engine = pyttsx3.init()
-        try:
-            engine.save_to_file(transcript, output_path)
-            engine.runAndWait()
-        finally:
-            engine.stop()
-        if not os.path.isfile(output_path):
-            raise RuntimeError("pyttsx3 did not create an audio file")
-        with open(output_path, "rb") as audio_file:
-            audio_bytes = audio_file.read()
+def _generate_gtts_mp3(transcript: str) -> bytes:
+    if gTTS is None:
+        raise RuntimeError("gTTS is not installed")
+    audio_buffer = io.BytesIO()
+    gTTS(text=transcript, lang=GTTS_LANGUAGE, slow=False).write_to_fp(audio_buffer)
+    audio_bytes = audio_buffer.getvalue()
     if not audio_bytes:
-        raise RuntimeError("pyttsx3 created an empty audio file")
-    with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
-        if wav_file.getnframes() <= 0:
-            raise RuntimeError("pyttsx3 created a WAV file with no audio frames")
+        raise RuntimeError("gTTS created an empty audio file")
     return audio_bytes
 
 
@@ -776,7 +761,9 @@ def _generate_gemini_tts_wav(client, transcript: str, tts_config) -> bytes:
     raise tts_error
 
 
-def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[str, bytes]:
+def _generate_current_affairs_audio(
+    pdf_bytes: bytes, filename: str
+) -> tuple[str, bytes, str, str]:
     if not _current_affairs_pipeline_enabled():
         raise RuntimeError(
             "Current affairs audio pipeline requires GEMINI_API_KEY, TELEGRAM_API_ID, "
@@ -828,18 +815,21 @@ def _generate_current_affairs_audio(pdf_bytes: bytes, filename: str) -> tuple[st
         ),
     )
     try:
-        return transcript, _generate_gemini_tts_wav(client, transcript, tts_config)
+        return (
+            transcript,
+            _generate_gemini_tts_wav(client, transcript, tts_config),
+            ".wav",
+            "audio/wav",
+        )
     except Exception:
         logger.exception("Gemini TTS providers failed for %s", filename)
-        if not PYTTSX3_FALLBACK_ENABLED:
-            raise
         try:
-            audio_bytes = _generate_pyttsx3_wav(transcript)
-            logger.info("Generated current-affairs audio with pyttsx3 for %s", filename)
-            return transcript, audio_bytes
+            audio_bytes = _generate_gtts_mp3(transcript)
+            logger.info("Generated current-affairs audio with gTTS for %s", filename)
+            return transcript, audio_bytes, ".mp3", "audio/mpeg"
         except Exception as exc:
             raise RuntimeError(
-                "Gemini TTS and pyttsx3 fallback both failed"
+                "Gemini TTS and gTTS fallback both failed"
             ) from exc
 
 
@@ -887,7 +877,9 @@ async def send_current_affairs_reminder_email() -> None:
         return
     filename, pdf_bytes, dedupe_key = result
     try:
-        transcript, audio_bytes = _generate_current_affairs_audio(pdf_bytes, filename)
+        transcript, audio_bytes, audio_extension, audio_mime = (
+            _generate_current_affairs_audio(pdf_bytes, filename)
+        )
         logger.info("Generated current-affairs audio for %s", filename)
     except Exception:
         logger.exception("Current-affairs summarization/TTS failed for %s", filename)
@@ -903,9 +895,9 @@ async def send_current_affairs_reminder_email() -> None:
         send_email(
             subject,
             body,
-            attachment_name=f"{os.path.splitext(filename)[0]}.wav",
+            attachment_name=f"{os.path.splitext(filename)[0]}{audio_extension}",
             attachment_bytes=audio_bytes,
-            attachment_mime="audio/wav",
+            attachment_mime=audio_mime,
         )
     else:
         send_email(subject, body)
