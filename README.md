@@ -48,16 +48,13 @@ The recommended text setup is `gemini-3.6-flash` as the primary model and
 retired or unavailable primary model immediately activates the fallback without
 retrying the invalid model. Set the fallback only to a model available to your
 Gemini API key.
-For TTS, `gemini-2.5-flash-preview-tts` is the primary model and
-`gemini-2.5-pro-preview-tts` is the fallback through
-`GEMINI_TTS_FALLBACK_MODEL`. TTS timeouts and unavailable-model responses use
-the same bounded fallback behavior.
-If both Gemini TTS models fail, the app uses gTTS as a final fallback. Configure
-its language with `GTTS_LANGUAGE` (default `en`). gTTS requires outbound
-internet access, writes MP3 rather than WAV, and may be throttled because it
-uses the Google Translate speech endpoint. Gemini output is attached as WAV;
-gTTS output is attached as MP3. If all TTS providers fail, the PDF remains
-unprocessed and the next reminder can retry it.
+Gemini TTS settings are retained for possible future use, but Gemini TTS is
+currently inactive. Current-affairs audio is generated directly with gTTS.
+Configure its language with `GTTS_LANGUAGE` (default `en`). gTTS requires
+outbound internet access, writes MP3 rather than WAV, and may be throttled
+because it uses the Google Translate speech endpoint. The generated output is
+attached as MP3. If gTTS fails, the PDF remains unprocessed and the next
+reminder can retry it.
 The Telegram PDF is marked processed only after the audio email succeeds, so a
 temporary Gemini or email-provider failure can be retried by the next reminder.
 

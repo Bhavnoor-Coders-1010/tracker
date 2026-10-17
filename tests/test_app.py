@@ -192,6 +192,17 @@ class TrackerDataTests(unittest.TestCase):
         gtts.assert_called_once_with(text="hello", lang=app.GTTS_LANGUAGE, slow=False)
         gtts_instance.write_to_fp.assert_called_once()
 
+    def test_gemini_tts_models_are_not_used_by_gtts_generator(self):
+        fake_audio = b"ID3 fake mp3"
+        gtts_instance = Mock()
+        gtts_instance.write_to_fp.side_effect = (
+            lambda output: output.write(fake_audio)
+        )
+        with patch.object(app, "_generate_gemini_tts_wav") as gemini_tts, \
+                patch.object(app, "gTTS", return_value=gtts_instance):
+            self.assertEqual(app._generate_gtts_mp3("complete summary"), fake_audio)
+        gemini_tts.assert_not_called()
+
     def test_schedule_all_jobs_is_safe_before_scheduler_starts(self):
         was_running = app.scheduler.running
         try:

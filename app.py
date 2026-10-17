@@ -804,33 +804,14 @@ def _generate_current_affairs_audio(
     if not transcript:
         raise RuntimeError(f"Gemini returned no text summary for {filename}")
 
-    tts_config = types.GenerateContentConfig(
-        response_modalities=["AUDIO"],
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name=GEMINI_TTS_VOICE
-                )
-            )
-        ),
-    )
+    # Gemini TTS is intentionally inactive. gTTS is used directly so the
+    # complete summary is converted without the previous partial-audio limit.
     try:
-        return (
-            transcript,
-            _generate_gemini_tts_wav(client, transcript, tts_config),
-            ".wav",
-            "audio/wav",
-        )
-    except Exception:
-        logger.exception("Gemini TTS providers failed for %s", filename)
-        try:
-            audio_bytes = _generate_gtts_mp3(transcript)
-            logger.info("Generated current-affairs audio with gTTS for %s", filename)
-            return transcript, audio_bytes, ".mp3", "audio/mpeg"
-        except Exception as exc:
-            raise RuntimeError(
-                "Gemini TTS and gTTS fallback both failed"
-            ) from exc
+        audio_bytes = _generate_gtts_mp3(transcript)
+        logger.info("Generated current-affairs audio with gTTS for %s", filename)
+        return transcript, audio_bytes, ".mp3", "audio/mpeg"
+    except Exception as exc:
+        raise RuntimeError("gTTS audio generation failed") from exc
 
 
 async def _fetch_latest_current_affairs_pdf() -> Optional[tuple[str, bytes, str]]:
